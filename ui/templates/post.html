@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Create a Post</h1>
+<form action="{{ url_for('create_post') }}" method="post">
+    <textarea name="content" placeholder="What's on your mind?" required style="width: 100%; height: 100px;"></textarea><br><br>
+    <button type="submit">Post</button>
+</form>
+{% endblock %}

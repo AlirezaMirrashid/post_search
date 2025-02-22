@@ -1,0 +1,221 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    container_name: postgres
+    image: postgres:14
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: post_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - elastic-network
+    restart: always
+
+  # Redis Service
+  redis:
+    container_name: redis
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - elastic-network
+    restart: always
+
+  # Zookeeper for Kafka
+  zookeeper:
+    container_name: zookeeper
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - elastic-network
+    restart: always
+
+  # Kafka Service
+  kafka:
+    container_name: kafka
+    image: confluentinc/cp-kafka:latest
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - elastic-network
+    restart: always
+    depends_on:
+      - zookeeper
+
+  # Elasticsearch Service
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+    environment:
+      discovery.type: single-node
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: curl -s http://localhost:9200 >/dev/null || exit 1
+      interval: 15s
+      retries: 5
+    volumes:
+      - elasticsearch_data:/var/lib/elasticsearch/data
+    networks:
+      - elastic-network
+    restart: always
+
+  # Post Service
+  post_service:
+    container_name: post_service
+    build: ./services/post_service
+    environment:
+      - PORT=5001
+      - DATABASE_URL=postgresql://user:password@postgres:5432/post_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKER=kafka:9092
+    healthcheck:
+      test: curl -s http://localhost:5001/posts || exit 1
+      interval: 15s
+      retries: 10
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - elasticsearch
+    ports:
+      - "5001:5001"
+    networks:
+      - elastic-network
+    restart: always
+
+  # Like Service
+  like_service:
+    container_name: like_service
+    build: ./services/like_service
+    environment:
+      - PORT=5002
+      - ELASTIC_HOST=elasticsearch
+      - ELASTIC_PORT=9200
+      - ES_INDEX=posts
+      - DATABASE_URL=postgresql://user:password@postgres:5432/post_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKER=kafka:9092
+    healthcheck:
+      test: curl -s http://localhost:5002/likes || exit 1
+      interval: 15s
+      retries: 10
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - elasticsearch
+    ports:
+      - "5002:5002"
+    networks:
+      - elastic-network
+    restart: always
+
+  # Search Service
+  search_service:
+    container_name: search_service
+    build: ./services/search_service
+    environment:
+      - PORT=5003
+      - ELASTIC_HOST=elasticsearch
+      - ELASTIC_PORT=9200
+      - ES_INDEX=posts
+    healthcheck:
+      test: curl -s http://localhost:5003/search || exit 1
+      interval: 15s
+      retries: 10
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5003:5003"
+    networks:
+      - elastic-network
+    restart: always
+
+  # UI Service
+  ui:
+    container_name: ui
+    build: ./ui
+    environment:
+      - PORT=5000
+      - API_GATEWAY_URL=http://api_gateway:3000/
+    healthcheck:
+      test: curl -s http://localhost:5000 || exit 1
+      interval: 15s
+      retries: 10
+    depends_on:
+      - post_service
+      - like_service
+      - search_service
+    ports:
+      - "5000:5000"
+    networks:
+      - elastic-network
+    restart: always
+
+  # Ingestion Worker Service
+  ingestion_worker:
+    container_name: ingestion_worker
+    build: ./services/ingestion_worker
+    command: python ingest_post_event.py
+    environment:
+      - ELASTIC_HOST=elasticsearch
+      - ELASTIC_PORT=9200
+      - ES_INDEX=posts
+      - KAFKA_BROKER=kafka:9092
+      - POST_EVENTS_TOPIC=post_events
+      - KAFKA_GROUP_ID=post_ingestion_group
+    depends_on:
+      - kafka
+      - elasticsearch
+    networks:
+      - elastic-network
+    restart: always
+
+  # API Gateway Service
+  api_gateway:
+    container_name: api_gateway
+    build: ./services/api_gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - POST_SERVICE_URL=http://post_service:5001/posts/
+      - LIKE_SERVICE_URL=http://like_service:5002/likes/
+      - SEARCH_SERVICE_URL=http://search_service:5003/search/
+    depends_on:
+      - post_service
+      - like_service
+      - search_service
+    networks:
+      - elastic-network
+    restart: always
+
+# Volumes for persistent data
+volumes:
+  postgres_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+# Define networks
+networks:
+  elastic-network:
+    driver: bridge

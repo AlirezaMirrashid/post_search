@@ -1,0 +1,98 @@
+Overview
+The API gateway module acts as a single entry point for incoming HTTP requests. It is responsible for:
+
+Authentication: Verifying that the incoming request is from an authorized client.
+Routing: Directing the request to the appropriate backend service or function based on the request path.
+Error Handling: Returning proper error responses if authentication fails, the route is unrecognized, or an internal error occurs.
+Detailed Flow
+1. Gateway Request Function
+python
+def gateway_request(request):
+    """
+    Example API gateway request handler.
+    This function:
+      1. Checks for an Authorization header and validates the token.
+      2. Routes the request based on the path.
+         For this example, it only handles search requests.
+    """
+    # 1. Authenticate Request
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not validate_token(auth_header):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # 2. Route Request
+    if request.path.startswith("/search"):
+        return route_search_request(request)
+    else:
+        # Could add more routing logic here for other endpoints.
+        return jsonify({"error": "Endpoint not found"}), 404
+Authentication:
+
+The function first retrieves the Authorization header from the request.
+It then calls validate_token(auth_header) to ensure the token is valid.
+If the token is missing or invalid, it immediately returns a 401 Unauthorized response.
+Routing:
+
+The function checks the path of the request.
+If the path starts with /search, it passes the request to the route_search_request() function.
+If the path does not match any known endpoint, it returns a 404 Endpoint not found error.
+2. Token Validation
+python
+def validate_token(token):
+    """
+    Dummy token validation.
+    In production, use JWT or OAuth2 libraries to validate tokens.
+    Expected token: "Bearer secret_token"
+    """
+    expected_token = "Bearer secret_token"
+    return token == expected_token
+Purpose:
+The validate_token function is a placeholder for actual token validation logic. It simply checks if the token exactly matches a predetermined string ("Bearer secret_token").
+
+Production Note:
+In a real system, you would replace this with robust authentication using JWT, OAuth2, or other security mechanisms. This ensures that only properly authenticated clients can access the API.
+
+3. Routing Search Requests
+python
+def route_search_request(request):
+    """
+    Extracts search parameters from the request and calls the Elasticsearch client.
+    """
+    keyword = request.args.get("keyword", "")
+    sort_by = request.args.get("sort_by", "recency")
+    try:
+        es_client = ElasticClient()
+        results = es_client.search(keyword, sort_by)
+        return jsonify(results), 200
+    except Exception as e:
+        logging.exception("Error processing search request")
+        return jsonify({"error": "Internal server error"}), 500
+Parameter Extraction:
+
+The function retrieves search parameters (keyword and sort_by) from the query string.
+Default values are provided if these parameters are missing (an empty keyword and default sorting by recency).
+Performing the Search:
+
+An instance of the Elasticsearch client is created.
+The search method of the client is called with the extracted parameters.
+The resulting search hits (documents) are returned as a JSON response with a 200 OK status.
+Error Handling:
+
+If any error occurs during the search (e.g., connectivity issues with Elasticsearch), the error is logged, and a 500 Internal Server Error response is returned.
+
+Summary
+Incoming Request:
+The API gateway receives a request and checks for the Authorization header.
+
+Authentication:
+The validate_token function confirms whether the provided token matches the expected value.
+
+Routing:
+
+If authenticated, the request path is checked.
+For /search paths, route_search_request extracts search parameters and calls the Elasticsearch client to perform the search.
+If the path doesn’t match any known endpoints, a 404 error is returned.
+Response:
+The appropriate response is sent back to the client—either the search results, an error due to authentication failure, or a 404 error if the endpoint is not recognized.
+
+This design allows you to expand the gateway in the future to handle more endpoints, implement more robust security (e.g., JWT validation), and perform additional routing or request transformations as needed.

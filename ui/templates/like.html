@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Like a Post</h1>
+<form action="{{ url_for('like_post') }}" method="post">
+    <input type="text" name="post_id" placeholder="Enter Post ID" required><br><br>
+    <button type="submit">Like</button>
+</form>
+{% endblock %}
