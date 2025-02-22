@@ -29,8 +29,8 @@ The services communicate over Docker networks using service names. The API Gatew
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/facebook_post_search.git
-   cd facebook_post_search
+   git clone https://github.com/AlirezaMirrashid/post_search.git
+   cd post_search
    ```
 2. **Build and Run All Services:**
 Use Docker Compose to build and run the entire stack:
@@ -56,6 +56,6 @@ Ingestion Worker
 
    UI: Open http://localhost:5000 in your browser.
    API Gateway: Accessible at http://localhost:3000 (for API testing).
-   
-4. **License:**
+
+## License
 This project is licensed under the MIT License. See the LICENSE file for details.
